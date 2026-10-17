@@ -10,7 +10,7 @@ VectorList extractSiftDescriptors(const std::string& imagePath) {
 
     cv::Mat image = cv::imread(imagePath, cv::IMREAD_GRAYSCALE);
     if (image.empty()) {
-        std::cerr << "Error: could not read image: " << imagePath << "\n";
+        std::cerr << "Warning: could not read image: " << imagePath << "\n";
 
         return result;
     }

@@ -1,7 +1,7 @@
+#include "sift_extractor.hpp"
+
 #include <iostream>
 #include <string>
-
-#include "sift_extractor.hpp"
 
 
 int main(int argc, char* argv[]) {

@@ -12,8 +12,8 @@ using VectorList = std::vector<Vector>;
 
 // Represents one image in the database
 struct ImageEntry {
-    std::string imageId;    // Name of the image
-    std::string sequenceId;
+    std::string imageId;        // Name of the image
+    std::string sequenceId;     // "v_bird", empty for MIRFLickr
     Vector imageVector;
 };
 

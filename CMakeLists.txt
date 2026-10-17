@@ -12,7 +12,7 @@ find_package(OpenCV REQUIRED)
 
 # Everything except main
 add_library(search_core
-    src/distance.cpp
+    src/common.cpp
     src/sift_extractor.cpp
 )
 target_include_directories(search_core PUBLIC include)
