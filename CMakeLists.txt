@@ -1,15 +1,25 @@
 cmake_minimum_required(VERSION 3.20)
-project(ImageSearch LANGUAGES CXX)
+project(imageSearch LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
 find_package(OpenCV REQUIRED)
-find_package(Eigen3 REQUIRED)
 
-# add_executable()
-
-target_link_libraries(imageSearch PRIVATE
-    ${OpenCV_LIBS}
-    Eigen3::Eigen
+# Everything except main
+add_library(search_core
+    src/common.cpp
+    src/sift_extractor.cpp
 )
+target_include_directories(search_core PUBLIC include)
+target_link_libraries(search_core PUBLIC ${OpenCV_LIBS})
+target_compile_options(search_core PRIVATE -Wall -Wextra -Wpedantic)
+
+# The whole executable
+add_executable(search src/main.cpp)
+target_link_libraries(search PRIVATE search_core)
+target_compile_options(search PRIVATE -Wall -Wextra -Wpedantic)
