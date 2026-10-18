@@ -4,7 +4,7 @@
 #include <cassert>
 
 
-double euclideanDistance(const Vector& a, const Vector& b) {
+double squaredDistance(const Vector& a, const Vector& b) {
     assert(a.size() == b.size());
 
     double sum = 0.0;
@@ -13,5 +13,9 @@ double euclideanDistance(const Vector& a, const Vector& b) {
         sum += diff * diff;
     }
 
-    return std::sqrt(sum);
+    return sum;
+}
+
+double euclideanDistance(const Vector& a, const Vector& b) {
+    return std::sqrt(squaredDistance(a, b));
 }

@@ -86,7 +86,8 @@ bool load_descriptors(const std::string& path, VectorList& descriptors) {
 
     constexpr std::uint32_t expected_columns = 128;
     constexpr std::uint64_t max_descriptors = 10'000'000;
-    VectorList loaded(rows);
+    // VectorList loaded(rows);
+    VectorList loaded;
 
     std::ifstream desc_load(path, std::ios::binary);
     if (!desc_load) {
