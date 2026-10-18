@@ -17,6 +17,9 @@ struct ImageEntry {
     Vector imageVector;
 };
 
+// Same as Euclidean distance without the square root for faster computations
+double squaredDistance(const Vector& a, const Vector& b); 
+
 double euclideanDistance(const Vector& a, const Vector& b);
 
 #endif
