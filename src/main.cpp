@@ -2,7 +2,10 @@
 
 #include <iostream>
 #include <string>
+#include <filesystem>
 
+//local setup caching path
+const std::string caching_path = "cached_descriptors/";
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -21,6 +24,22 @@ int main(int argc, char* argv[]) {
         }
 
         std::cout << "\n";
+
+        std::string cacheFile = (std::filesystem::path(caching_path) / (std::filesystem::path(imagePath).stem().string() + ".yml")).string();
+
+        if (save_descriptors(cacheFile, descriptors)) {
+            std::cout << "Saved descriptors to " << cacheFile << '\n';
+        } else {
+            std::cout << "Could not save descriptors\n";
+        }
+
+        VectorList descriptors_loaded;
+
+        if (load_descriptors(cacheFile, descriptors_loaded)) {
+            std::cout << "Loaded " << descriptors_loaded.size() << " descriptors\n";
+        } else {
+            std::cout << "cache error\n";
+        }
     }
 
     return 0;
