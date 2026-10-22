@@ -71,4 +71,7 @@ Testing/
 hpatches/
 mirflickr/
 
+# Cache directory
+cache/
+
 .vscode/
