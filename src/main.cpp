@@ -1,4 +1,5 @@
 #include "sift_extractor.hpp"
+#include "vector_io.hpp"
 
 #include <iostream>
 #include <string>
@@ -25,9 +26,9 @@ int main(int argc, char* argv[]) {
 
         std::cout << "\n";
 
-        std::string cacheFile = (std::filesystem::path(caching_path) / (std::filesystem::path(imagePath).stem().string() + ".yml")).string();
+        std::string cacheFile = (std::filesystem::path(caching_path) / (std::filesystem::path(imagePath).stem().string() + ".bin")).string();
 
-        if (save_descriptors(cacheFile, descriptors)) {
+        if (saveVectors(cacheFile, descriptors)) {
             std::cout << "Saved descriptors to " << cacheFile << '\n';
         } else {
             std::cout << "Could not save descriptors\n";
@@ -35,7 +36,7 @@ int main(int argc, char* argv[]) {
 
         VectorList descriptors_loaded;
 
-        if (load_descriptors(cacheFile, descriptors_loaded)) {
+        if (loadVectors(cacheFile, descriptors_loaded)) {
             std::cout << "Loaded " << descriptors_loaded.size() << " descriptors\n";
         } else {
             std::cout << "cache error\n";
