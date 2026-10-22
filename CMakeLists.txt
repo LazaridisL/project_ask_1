@@ -16,6 +16,7 @@ add_library(search_core
     src/sift_extractor.cpp
     src/kmeans.cpp
     src/vector_io.cpp
+    src/dataset.cpp
 )
 target_include_directories(search_core PUBLIC include)
 target_link_libraries(search_core PUBLIC ${OpenCV_LIBS})
