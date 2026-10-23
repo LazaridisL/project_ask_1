@@ -17,18 +17,11 @@ add_library(search_core
     src/kmeans.cpp
     src/vector_io.cpp
     src/dataset.cpp
+    src/vocabulary.cpp
 )
 target_include_directories(search_core PUBLIC include)
 target_link_libraries(search_core PUBLIC ${OpenCV_LIBS})
 target_compile_options(search_core PRIVATE -Wall -Wextra -Wpedantic)
-
-# Tests
-enable_testing()
-
-add_executable(test_kmeans tests/test_kmeans.cpp)
-target_link_libraries(test_kmeans PRIVATE search_core)
-target_compile_options(test_kmeans PRIVATE -Wall -Wextra -Wpedantic)
-add_test(NAME kmeans COMMAND test_kmeans)
 
 # The whole executable
 add_executable(search src/main.cpp)

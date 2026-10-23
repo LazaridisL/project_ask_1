@@ -17,4 +17,7 @@ struct KMeansResult {
 // Requires that all points have the same length and the k clusters are less than points.size()
 KMeansResult kmeans(const VectorList& points, int k, int maxIterations, unsigned int seed);
 
+// Returns the index of the point's nearest centroid
+int findNearestCentroid(const Vector& point, const VectorList& centroids);
+
 #endif
