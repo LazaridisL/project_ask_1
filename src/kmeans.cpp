@@ -5,8 +5,7 @@
 #include <random>
 
 
-// Returns the index of the centroid closest to the point
-static int findNearestCentroid(const Vector& point, const VectorList& centroids) {
+int findNearestCentroid(const Vector& point, const VectorList& centroids) {
     int nearestIndex = 0;
     double nearestDistance = squaredDistance(point, centroids[0]);
 
