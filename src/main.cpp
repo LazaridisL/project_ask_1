@@ -2,10 +2,13 @@
 #include <string>
 #include <filesystem>
 #include <vector>
+#include <cmath>
 
+#include "img_db.hpp"
 #include "sift_extractor.hpp"
 #include "vector_io.hpp"
 #include "dataset.hpp"
+#include "vocabulary.hpp"
 
 
 int main(int argc, char* argv[]) {
@@ -41,6 +44,52 @@ int main(int argc, char* argv[]) {
         }
     }
     std::cout << "Missing HPatches images: " << missingImages << "\n";
+
+    //Check if image database is being made correctly
+    if (missingImages > 0) {
+        std::cerr << "Missing HPatches images.\n";
+        return 1;
+    }
+
+    const int K = 25;               //Number of visual words
+    const int S = 50;               //Max descriptors sampled per image
+    const int max_iterations = 20;  //Max iterations
+    const unsigned int seed = 67;   //Fixed seed
+
+    //Get the training images
+    std::vector<std::string> training_paths;
+
+    for (const std::string& sequence : split.train) {
+        for (int i = 1; i <= 6; i++) {
+            training_paths.push_back(
+                hpatchesImagePath(hpatchesFolder, sequence, i)
+            );
+        }
+    }
+
+    std::cout << "\nBuilding vocabulary:\n";
+
+    VectorList vocabulary = buildVocabulary(
+        training_paths, K, S, max_iterations, seed
+    );
+
+    if (vocabulary.size() != static_cast<std::size_t>(K)) {
+        std::cerr << "Could not build vocabulary.\n";
+        return 1;
+    }
+
+    ImageDatabase database;
+
+    build_hpatches_database(
+        hpatchesFolder, split, "validation", vocabulary, database
+    );
+
+    std::cout << "DB size: " << database.size() << '\n';
+
+    if (!database.empty()) {
+        std::cout << "First entry: " << database[0].imageId << '\n';
+        std::cout << "Total size: " << database[0].imageVector.size() << '\n';
+    }
 
     // MIRFlickr images
     std::vector<std:: string> mirflickrImages = listMirflickrImages(mirflickrFolder);

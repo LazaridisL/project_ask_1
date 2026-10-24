@@ -18,6 +18,7 @@ add_library(search_core
     src/vector_io.cpp
     src/dataset.cpp
     src/vocabulary.cpp
+    src/img_db.cpp
 )
 target_include_directories(search_core PUBLIC include)
 target_link_libraries(search_core PUBLIC ${OpenCV_LIBS})
