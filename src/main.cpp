@@ -3,84 +3,99 @@
 #include <filesystem>
 #include <vector>
 
-#include "sift_extractor.hpp"
-#include "vector_io.hpp"
 #include "dataset.hpp"
+#include "options.hpp"
+#include "vector_cache.hpp"
+
+
+// Paths for all 6 images in a sequence
+static std::vector<std::string> allImagesOf(const std::vector<std::string>& sequences,
+                                            const std::string& hpatchesFolder)
+{
+    std::vector<std::string> paths;
+    for (const std::string& sequence : sequences) {
+        for (int imageNumber = 1; imageNumber <= 6; imageNumber++) {
+            paths.push_back(hpatchesImagePath(hpatchesFolder, sequence, imageNumber));
+        }
+    }
+    return paths;
+}
 
 
 int main(int argc, char* argv[]) {
-    if (argc != 4) {
-        std::cerr << "Usage: ./search <hpatches folder> <mirflickr folder> <split file>\n";
-
+    Options options;
+    if (!parseOptions(argc, argv, options)) {
+        printUsage();
+        
         return 1;
     }
 
-    std::string hpatchesFolder = argv[1];
-    std::string mirflickrFolder = argv[2];
-    std::string splitPath = argv[3];
-
-    // Read the split file
     Split split;
-    if (!readSplit(splitPath, split)) {
+    if (!readSplit(options.splitPath, split)) {
         return 1;
     }
-    std::cout << "Sequences: " << split.train.size() << " train, " << split.validation.size() << " validation, " << split.test.size() << " test\n";
+    const std::vector<std::string>& querySequence = (options.querySet == "validation") ? split.validation : split.test;
 
-    // HPatches images
-    int missingImages = 0;
-    std::vector<std::vector<std::string>> allSets = {split.train, split.validation, split.test};
-    for (const std::vector<std::string>& set : allSets) {
-        for (const std::string& sequence : set) {
-            for (int imageNumber=1; imageNumber<=6;imageNumber++) {
-                std::string path = hpatchesImagePath(hpatchesFolder, sequence, imageNumber);
-                if (!std::filesystem::exists(path)) {
-                    std::cerr << "Missing: " << path << "\n";
-                    missingImages++;
-                }
-            }
+    std::vector<std::string> trainingPaths = allImagesOf(split.train, options.hpatchesFolder);
+    std::vector<std::string> hpatchesPaths = allImagesOf(querySequence, options.hpatchesFolder);
+    std::vector<std::string> mirflickrPaths = listMirflickrImages(options.mirflickrFolder);
+
+    // Cache files are named based on the parameters used to produce them and the fingerprint of the exact images used
+    // Different K, S or seed cannot use the same file
+    std::string vocabularyFile;
+    std::string hpatchesFile;
+    std::string mirflickrFile;
+
+    if (!options.cacheFolder.empty()) {
+        std::filesystem::create_directories(options.cacheFolder);
+        std::string parameters = "K" + std::to_string(options.vocabularySize)
+                               + "S" + std::to_string(options.samplesPerImage)
+                               + "seed" + std::to_string(options.seed);
+
+        std::vector<std::string> vocabularyInputs = trainingPaths;
+        vocabularyInputs.push_back(parameters);
+        std::string vocabularyKey = cacheFingerprint(vocabularyInputs);
+
+        std::vector<std::string> hpatchesInputs = hpatchesPaths;
+        hpatchesInputs.push_back(vocabularyKey);
+
+        std::vector<std::string> mirflickrInputs = mirflickrPaths;
+        mirflickrInputs.push_back(vocabularyKey);
+
+        std::filesystem::path folder = options.cacheFolder;
+        vocabularyFile = (folder / ("vocabulary_" + parameters + "_" + vocabularyKey + ".bin")).string();
+        hpatchesFile = (folder / ("hpatches_" + options.querySet + "_" + parameters + "_"
+                                  + cacheFingerprint(hpatchesInputs) + ".bin")).string();
+        mirflickrFile = (folder / ("mirflickr_" + parameters + "_"
+                                   + cacheFingerprint(mirflickrInputs) + ".bin")).string();
+    }
+
+
+
+    // Create the vocabulary from the training images
+    VectorList vocabulary = loadOrBuildVocabulary(trainingPaths, options.vocabularySize,
+                                                  options.samplesPerImage, options.seed,
+                                                  vocabularyFile);
+    if (vocabulary.empty()) {
+        return 1;
+    }
+
+    // Vectors from the HPatches images query set
+    VectorList hpatchesVectors = loadOrComputeImageVectors(hpatchesPaths, vocabulary, hpatchesFile, "HPatches " + options.querySet);
+    
+    // Vectors of the MIRFlickr images
+    VectorList mirflickrVectors = loadOrComputeImageVectors(mirflickrPaths, vocabulary, mirflickrFile, "MIRFlickr");
+
+    int emptyMirflickr = 0;
+    for (const Vector& vector : mirflickrVectors) {
+        if (isEmptyImageVector(vector)) {
+            emptyMirflickr++;
         }
     }
-    std::cout << "Missing HPatches images: " << missingImages << "\n";
 
-    // MIRFlickr images
-    std::vector<std:: string> mirflickrImages = listMirflickrImages(mirflickrFolder);
-    std::cout << "MIRFlickr images: " << mirflickrImages.size() << "\n";
-    if (!mirflickrImages.empty()) {
-        std::cout << "First: " << mirflickrImages.front() << "\n";
-        std::cout << "Last: " << mirflickrImages.back() << "\n";
-    }
-
-    // SIFT save and load on the first validation query
-    if (split.validation.empty()) {
-        std::cerr << "No validation sequences\n";
-        return 1;
-    }
-    std::string imagePath = hpatchesImagePath(hpatchesFolder, split.validation[0], 1);
-    VectorList descriptors = extractSiftDescriptors(imagePath);
-    std::cout << "\n" << imagePath << ": " << descriptors.size() << " descriptors\n";
-
-    std::filesystem::create_directories("cache");
-    std::string cachePath = "cache/test_save_load.bin";
-
-    if (!saveVectors(cachePath, descriptors)) {
-        std::cerr << "Could not save " << cachePath << "\n";
-        return 1;
-    }
-
-    VectorList loaded;
-    if (!loadVectors(cachePath, loaded)) {
-        std::cerr << "Could not load " << cachePath << "\n";
-        return 1;
-    }
-
-    if (loaded == descriptors) {
-        std::cout << "Test OK: " << loaded.size() << " descriptors saved and loaded unchanged\n";
-    } else {
-        std::cerr << "Test FAILED: loaded data differs from original\n";
-        return 1;
-    }
-
-    std::filesystem::remove(cachePath);
+    std::cout << "Vocabulary " << vocabulary.size() << " words\n";
+    std::cout << "HPatches " << options.querySet << ": " << hpatchesVectors.size() << " vectors\n";
+    std::cout << "MIRFlickr " << mirflickrVectors.size() << " vectors " << emptyMirflickr << " without descriptors\n";
     
     return 0;
 }
