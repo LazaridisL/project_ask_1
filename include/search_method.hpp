@@ -5,6 +5,7 @@
 
 #include "common.hpp"
 
+inline constexpr int resultsPerQuery = 10;
 
 class SearchMethod {
 public:
@@ -13,8 +14,8 @@ public:
     // Builds the index. Gets called before any search
     virtual void build(const VectorList& database) = 0;
 
-    // Returns the top N indices from the database
-    virtual std::vector<int> search(const Vector& query, int topN) = 0;
+    // Returns the top resultsPerQuery indices from the database
+    virtual std::vector<int> search(const Vector& query) = 0;
 };
 
 #endif
