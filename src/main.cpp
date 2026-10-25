@@ -9,6 +9,8 @@
 #include "vector_io.hpp"
 #include "dataset.hpp"
 #include "vocabulary.hpp"
+#include "lsh_search.hpp"
+#include "exact_search.hpp"
 
 
 int main(int argc, char* argv[]) {
@@ -80,9 +82,12 @@ int main(int argc, char* argv[]) {
 
     ImageDatabase database;
 
-    build_hpatches_database(
+    if (!build_hpatches_database(
         hpatchesFolder, split, "validation", vocabulary, database
-    );
+    )) {
+        std::cerr << "Could not build validation database.\n";
+        return 1;
+    }
 
     std::cout << "DB size: " << database.size() << '\n';
 
@@ -107,6 +112,50 @@ int main(int argc, char* argv[]) {
     std::string imagePath = hpatchesImagePath(hpatchesFolder, split.validation[0], 1);
     VectorList descriptors = extractSiftDescriptors(imagePath);
     std::cout << "\n" << imagePath << ": " << descriptors.size() << " descriptors\n";
+    if (descriptors.empty()) {
+        std::cerr << "No SIFT descriptors for query image.\n";
+        return 1;
+    }
+
+    Vector query = computeHistogram(descriptors, vocabulary);
+    if (query.size() != vocabulary.size()) {
+        std::cerr << "Could not create query image histogram.\n";
+        return 1;
+    }
+
+    VectorList databaseVectors;
+    databaseVectors.reserve(database.size());
+    for (const ImageEntry& entry : database) {
+        databaseVectors.push_back(entry.imageVector);
+    }
+
+    LSHSearch lsh;
+    if (!lsh.build(databaseVectors)) {
+        std::cerr << "Could not build LSH index.\n";
+        return 1;
+    }
+
+    const std::vector<int> matches = lsh.search(query, 5);
+    std::cout << "Top LSH matches for " << split.validation[0] << "/1:\n";
+    for (int index : matches) {
+        const ImageEntry& match = database[static_cast<std::size_t>(index)];
+        std::cout << "  " << match.imageId << " ("
+                  << match.sequenceId << ")\n";
+    }
+
+    ExactSearch exact;
+    if (!exact.build(databaseVectors)) {
+        std::cerr << "Could not build exact-search database.\n";
+        return 1;
+    }
+
+    const std::vector<int> exact_matches = exact.search(query, 5);
+    std::cout << "Top exact matches for " << split.validation[0] << "/1:\n";
+    for (int index : exact_matches) {
+        const ImageEntry& match = database[static_cast<std::size_t>(index)];
+        std::cout << "  " << match.imageId << " ("
+                  << match.sequenceId << ")\n";
+    }
 
     std::filesystem::create_directories("cache");
     std::string cachePath = "cache/test_save_load.bin";

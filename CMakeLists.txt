@@ -19,6 +19,8 @@ add_library(search_core
     src/dataset.cpp
     src/vocabulary.cpp
     src/img_db.cpp
+    src/lsh_search.cpp
+    src/exact_search.cpp
 )
 target_include_directories(search_core PUBLIC include)
 target_link_libraries(search_core PUBLIC ${OpenCV_LIBS})
