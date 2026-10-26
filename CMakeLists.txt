@@ -9,6 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 find_package(OpenCV REQUIRED)
+find_package(OpenMP REQUIRED)
 
 # Everything except main
 add_library(search_core
@@ -18,12 +19,15 @@ add_library(search_core
     src/vector_io.cpp
     src/dataset.cpp
     src/vocabulary.cpp
-    src/img_db.cpp
-    src/lsh_search.cpp
+    src/vector_cache.cpp
+    src/options.cpp
+    src/database.cpp
     src/exact_search.cpp
+    src/metrics.cpp
+    src/evaluation.cpp
 )
 target_include_directories(search_core PUBLIC include)
-target_link_libraries(search_core PUBLIC ${OpenCV_LIBS})
+target_link_libraries(search_core PUBLIC ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
 target_compile_options(search_core PRIVATE -Wall -Wextra -Wpedantic)
 
 # The whole executable
