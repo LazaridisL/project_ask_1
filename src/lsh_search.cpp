@@ -26,20 +26,20 @@ LSHSearch::LSHSearch(
     }
 }
 
-bool LSHSearch::build(const VectorList& database) {
+void LSHSearch::build(const VectorList& database) {
     if (database.empty() || database.front().empty() ||
         database.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
-        return false;
+        return;
     }
 
     const std::size_t dimensions = database.front().size();
     for (const Vector& vector : database) {
         if (vector.size() != dimensions) {
-            return false;
+            return;
         }
         for (float value : vector) {
             if (!std::isfinite(value)) {
-                return false;
+                return;
             }
         }
     }
@@ -75,11 +75,10 @@ bool LSHSearch::build(const VectorList& database) {
     database_ = database;
     dimensions_ = dimensions;
     tables_ = std::move(tables);
-    return true;
 }
 
-std::vector<int> LSHSearch::search(const Vector& query, int top_n) const {
-    if (tables_.empty() || top_n <= 0 || query.size() != dimensions_) {
+std::vector<int> LSHSearch::search(const Vector& query) {
+    if (tables_.empty() || resultsPerQuery <= 0 || query.size() != dimensions_) {
         return {};
     }
     for (float value : query) {
@@ -124,8 +123,8 @@ std::vector<int> LSHSearch::search(const Vector& query, int top_n) const {
         return left < right;
     });
 
-    if (candidates.size() > static_cast<std::size_t>(top_n)) {
-        candidates.resize(static_cast<std::size_t>(top_n));
+    if (candidates.size() > static_cast<std::size_t>(resultsPerQuery)) {
+        candidates.resize(static_cast<std::size_t>(resultsPerQuery));
     }
     return candidates;
 }
