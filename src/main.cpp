@@ -10,12 +10,22 @@
 #include "exact_search.hpp"
 #include "options.hpp"
 #include "vector_cache.hpp"
+#include "lsh_search.hpp"
 
 
 static std::unique_ptr<SearchMethod> createSearchMethod(const Options& options) {
     if (options.method == "exact") {
         return std::make_unique<ExactSearch>();
     }
+
+    if (options.method == "lsh") {
+    return std::make_unique<LSHSearch>(
+        options.L,
+        options.k,
+        options.w,
+        options.seed
+    );
+}
 
     return nullptr;
 }

@@ -25,6 +25,7 @@ add_library(search_core
     src/exact_search.cpp
     src/metrics.cpp
     src/evaluation.cpp
+    src/lsh_search.cpp
 )
 target_include_directories(search_core PUBLIC include)
 target_link_libraries(search_core PUBLIC ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
