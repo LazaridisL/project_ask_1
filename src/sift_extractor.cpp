@@ -15,8 +15,8 @@ VectorList extractSiftDescriptors(const std::string& imagePath) {
         return result;
     }
 
-    // One detector per thread so it can be reused
-    thread_local auto sift = cv::SIFT::create();
+    // Use static to create only once and then be reused
+    static auto sift = cv::SIFT::create();
 
     std::vector<cv::KeyPoint> keypoints;
     cv::Mat descriptors;

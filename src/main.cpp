@@ -1,132 +1,184 @@
-#include <filesystem>
 #include <iostream>
-#include <memory>
 #include <string>
+#include <filesystem>
 #include <vector>
+#include <cmath>
 
-#include "database.hpp"
+#include "img_db.hpp"
+#include "sift_extractor.hpp"
+#include "vector_io.hpp"
 #include "dataset.hpp"
-#include "evaluation.hpp"
+#include "vocabulary.hpp"
+#include "lsh_search.hpp"
 #include "exact_search.hpp"
-#include "options.hpp"
-#include "vector_cache.hpp"
 
 
-static std::unique_ptr<SearchMethod> createSearchMethod(const Options& options) {
-    if (options.method == "exact") {
-        return std::make_unique<ExactSearch>();
+int main(int argc, char* argv[]) {
+    if (argc != 4) {
+        std::cerr << "Usage: ./search <hpatches folder> <mirflickr folder> <split file>\n";
+
+        return 1;
     }
 
-    return nullptr;
-}
+    std::string hpatchesFolder = argv[1];
+    std::string mirflickrFolder = argv[2];
+    std::string splitPath = argv[3];
 
-// The method name written on the first line of the output file.
-static std::string methodDisplayName(const std::string& method) {
-    if (method == "exact") return "Exact";
-    if (method == "lsh") return "LSH";
-    if (method == "hypercube") return "Hypercube";
-    if (method == "ivfflat") return "IVFFlat";
-    if (method == "ivfpq") return "IVFPQ";
+    // Read the split file
+    Split split;
+    if (!readSplit(splitPath, split)) {
+        return 1;
+    }
+    std::cout << "Sequences: " << split.train.size() << " train, " << split.validation.size() << " validation, " << split.test.size() << " test\n";
 
-    return method;
-}
+    // HPatches images
+    int missingImages = 0;
+    std::vector<std::vector<std::string>> allSets = {split.train, split.validation, split.test};
+    for (const std::vector<std::string>& set : allSets) {
+        for (const std::string& sequence : set) {
+            for (int imageNumber=1; imageNumber<=6;imageNumber++) {
+                std::string path = hpatchesImagePath(hpatchesFolder, sequence, imageNumber);
+                if (!std::filesystem::exists(path)) {
+                    std::cerr << "Missing: " << path << "\n";
+                    missingImages++;
+                }
+            }
+        }
+    }
+    std::cout << "Missing HPatches images: " << missingImages << "\n";
 
-static std::vector<std::string> allImagesOf(const std::vector<std::string>& sequences, const std::string& hpatchesFolder) {
-    std::vector<std::string> paths;
-    for (const std::string& sequence : sequences) {
-        for (int imageNumber = 1; imageNumber <= 6; imageNumber++) {
-            paths.push_back(hpatchesImagePath(hpatchesFolder, sequence, imageNumber));
+    //Check if image database is being made correctly
+    if (missingImages > 0) {
+        std::cerr << "Missing HPatches images.\n";
+        return 1;
+    }
+
+    const int K = 25;               //Number of visual words
+    const int S = 50;               //Max descriptors sampled per image
+    const int max_iterations = 20;  //Max iterations
+    const unsigned int seed = 67;   //Fixed seed
+
+    //Get the training images
+    std::vector<std::string> training_paths;
+
+    for (const std::string& sequence : split.train) {
+        for (int i = 1; i <= 6; i++) {
+            training_paths.push_back(
+                hpatchesImagePath(hpatchesFolder, sequence, i)
+            );
         }
     }
 
-    return paths;
-}
+    std::cout << "\nBuilding vocabulary:\n";
 
-int main(int argc, char* argv[]) {
-    Options options;
-    if (!parseOptions(argc, argv, options)) {
-        printUsage();
+    VectorList vocabulary = buildVocabulary(
+        training_paths, K, S, max_iterations, seed
+    );
+
+    if (vocabulary.size() != static_cast<std::size_t>(K)) {
+        std::cerr << "Could not build vocabulary.\n";
         return 1;
     }
 
-    Split split;
-    if (!readSplit(options.splitPath, split)) {
-        return 1;
-    }
-    const std::vector<std::string>& querySequences =
-        (options.querySet == "validation") ? split.validation : split.test;
+    ImageDatabase database;
 
-    std::vector<std::string> trainingPaths = allImagesOf(split.train, options.hpatchesFolder);
-    std::vector<std::string> hpatchesPaths = allImagesOf(querySequences, options.hpatchesFolder);
-    std::vector<std::string> mirflickrPaths = listMirflickrImages(options.mirflickrFolder);
-
-    // Cache files are named based on the parameters used to produce them and the fingerprint of the exact images used
-    // Different K, S or seed cannot use the same file
-    std::string vocabularyFile;
-    std::string hpatchesFile;
-    std::string mirflickrFile;
-
-    if (!options.cacheFolder.empty()) {
-        std::filesystem::create_directories(options.cacheFolder);
-        std::string parameters = "K" + std::to_string(options.vocabularySize)
-                               + "_S" + std::to_string(options.samplesPerImage)
-                               + "_seed" + std::to_string(options.seed);
-
-        std::vector<std::string> vocabularyInputs = trainingPaths;
-        vocabularyInputs.push_back(parameters);
-        std::string vocabularyKey = cacheFingerprint(vocabularyInputs);
-
-        std::vector<std::string> hpatchesInputs = hpatchesPaths;
-        hpatchesInputs.push_back(vocabularyKey);
-
-        std::vector<std::string> mirflickrInputs = mirflickrPaths;
-        mirflickrInputs.push_back(vocabularyKey);
-
-        std::filesystem::path folder = options.cacheFolder;
-        vocabularyFile = (folder / ("vocabulary_" + parameters + "_" + vocabularyKey + ".bin")).string();
-        hpatchesFile = (folder / ("hpatches_" + options.querySet + "_" + parameters + "_"
-                                  + cacheFingerprint(hpatchesInputs) + ".bin")).string();
-        mirflickrFile = (folder / ("mirflickr_" + parameters + "_"
-                                   + cacheFingerprint(mirflickrInputs) + ".bin")).string();
-    }
-
-    // Create the vocabulary from the training images
-    VectorList vocabulary = loadOrBuildVocabulary(trainingPaths, options.vocabularySize,
-                                                  options.samplesPerImage, options.seed,
-                                                  vocabularyFile);
-    if (vocabulary.empty()) {
+    if (!build_hpatches_database(
+        hpatchesFolder, split, "validation", vocabulary, database
+    )) {
+        std::cerr << "Could not build validation database.\n";
         return 1;
     }
 
-    // Vectors from the HPatches images query set
-    VectorList hpatchesVectors = loadOrComputeImageVectors(
-        hpatchesPaths, vocabulary, hpatchesFile, "HPatches " + options.querySet);
+    std::cout << "DB size: " << database.size() << '\n';
 
-    // Vectors of the MIRFlickr images
-    VectorList mirflickrVectors = loadOrComputeImageVectors(
-        mirflickrPaths, vocabulary, mirflickrFile, "MIRFlickr");
+    if (!database.empty()) {
+        std::cout << "First entry: " << database[0].imageId << '\n';
+        std::cout << "Total size: " << database[0].imageVector.size() << '\n';
+    }
 
-    // Create the images database
-    std::vector<ImageEntry> database = buildDatabase(querySequences, hpatchesVectors, mirflickrPaths, mirflickrVectors, options.distractorCount);
-    std::vector<ImageEntry> queries = buildQueries(querySequences, hpatchesVectors);
-    std::cerr << "Database: " << database.size() << " images, "
-              << queries.size() << " queries\n";
+    // MIRFlickr images
+    std::vector<std:: string> mirflickrImages = listMirflickrImages(mirflickrFolder);
+    std::cout << "MIRFlickr images: " << mirflickrImages.size() << "\n";
+    if (!mirflickrImages.empty()) {
+        std::cout << "First: " << mirflickrImages.front() << "\n";
+        std::cout << "Last: " << mirflickrImages.back() << "\n";
+    }
 
-    // Build the index of the chosen method
-    std::unique_ptr<SearchMethod> method = createSearchMethod(options);
-    if (!method) {
-        std::cerr << "Error: method \"" << options.method << "\" is not implemented yet\n";
+    // SIFT save and load on the first validation query
+    if (split.validation.empty()) {
+        std::cerr << "No validation sequences\n";
         return 1;
     }
-    method->build(vectorsOf(database));
-
-    // Run and evaluate every query
-    std::vector<QueryResult> results = runQueries(*method, database, queries);
-
-    if (!writeOutputFile(options.outputPath, methodDisplayName(options.method), database, results)) {
-        std::cerr << "Error: could not write " << options.outputPath << "\n";
+    std::string imagePath = hpatchesImagePath(hpatchesFolder, split.validation[0], 1);
+    VectorList descriptors = extractSiftDescriptors(imagePath);
+    std::cout << "\n" << imagePath << ": " << descriptors.size() << " descriptors\n";
+    if (descriptors.empty()) {
+        std::cerr << "No SIFT descriptors for query image.\n";
         return 1;
     }
-    printSummary(std::cout, results);
+
+    Vector query = computeHistogram(descriptors, vocabulary);
+    if (query.size() != vocabulary.size()) {
+        std::cerr << "Could not create query image histogram.\n";
+        return 1;
+    }
+
+    VectorList databaseVectors;
+    databaseVectors.reserve(database.size());
+    for (const ImageEntry& entry : database) {
+        databaseVectors.push_back(entry.imageVector);
+    }
+
+    LSHSearch lsh;
+    if (!lsh.build(databaseVectors)) {
+        std::cerr << "Could not build LSH index.\n";
+        return 1;
+    }
+
+    const std::vector<int> matches = lsh.search(query, 5);
+    std::cout << "Top LSH matches for " << split.validation[0] << "/1:\n";
+    for (int index : matches) {
+        const ImageEntry& match = database[static_cast<std::size_t>(index)];
+        std::cout << "  " << match.imageId << " ("
+                  << match.sequenceId << ")\n";
+    }
+
+    ExactSearch exact;
+    if (!exact.build(databaseVectors)) {
+        std::cerr << "Could not build exact-search database.\n";
+        return 1;
+    }
+
+    const std::vector<int> exact_matches = exact.search(query, 5);
+    std::cout << "Top exact matches for " << split.validation[0] << "/1:\n";
+    for (int index : exact_matches) {
+        const ImageEntry& match = database[static_cast<std::size_t>(index)];
+        std::cout << "  " << match.imageId << " ("
+                  << match.sequenceId << ")\n";
+    }
+
+    std::filesystem::create_directories("cache");
+    std::string cachePath = "cache/test_save_load.bin";
+
+    if (!saveVectors(cachePath, descriptors)) {
+        std::cerr << "Could not save " << cachePath << "\n";
+        return 1;
+    }
+
+    VectorList loaded;
+    if (!loadVectors(cachePath, loaded)) {
+        std::cerr << "Could not load " << cachePath << "\n";
+        return 1;
+    }
+
+    if (loaded == descriptors) {
+        std::cout << "Test OK: " << loaded.size() << " descriptors saved and loaded unchanged\n";
+    } else {
+        std::cerr << "Test FAILED: loaded data differs from original\n";
+        return 1;
+    }
+
+    std::filesystem::remove(cachePath);
+    
     return 0;
 }

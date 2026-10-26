@@ -1,28 +1,71 @@
 #include "exact_search.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <limits>
 #include <utility>
 
+bool ExactSearch::build(const VectorList& database) {
+    if (database.empty() || database.front().empty() ||
+        database.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return false;
+    }
 
-void ExactSearch::build(const VectorList& database) {
+    const std::size_t dimensions = database.front().size();
+    for (const Vector& vector : database) {
+        if (vector.size() != dimensions) {
+            return false;
+        }
+        for (float value : vector) {
+            if (!std::isfinite(value)) {
+                return false;
+            }
+        }
+    }
+
     database_ = database;
+    dimensions_ = dimensions;
+    return true;
 }
 
-std::vector<int> ExactSearch::search(const Vector& query) {
-    std::vector<std::pair<double, int>> distances;
-    distances.reserve(database_.size());
-    for (size_t i = 0; i < database_.size(); i++) {
-        distances.push_back({squaredDistance(query, database_[i]), static_cast<int>(i)});
+std::vector<int> ExactSearch::search(const Vector& query, int top_n) const {
+    if (database_.empty() || top_n <= 0 || query.size() != dimensions_) {
+        return {};
+    }
+    for (float value : query) {
+        if (!std::isfinite(value)) {
+            return {};
+        }
     }
 
-    size_t count = std::min(static_cast<size_t>(resultsPerQuery), distances.size());
-    std::partial_sort(distances.begin(), distances.begin() + count, distances.end());
-
-    std::vector<int> result;
-    result.reserve(count);
-    for (size_t i = 0; i < count; i++) {
-        result.push_back(distances[i].second);
+    std::vector<int> indices(database_.size());
+    for (std::size_t index = 0; index < indices.size(); ++index) {
+        indices[index] = static_cast<int>(index);
     }
-    
-    return result;
+
+    const auto distance_order = [this, &query](int left, int right) {
+        const double left_distance = squaredDistance(
+            query, database_[static_cast<std::size_t>(left)]
+        );
+        const double right_distance = squaredDistance(
+            query, database_[static_cast<std::size_t>(right)]
+        );
+        if (left_distance != right_distance) {
+            return left_distance < right_distance;
+        }
+        return left < right;
+    };
+
+    const std::size_t result_count = std::min(
+        static_cast<std::size_t>(top_n), indices.size()
+    );
+    std::partial_sort(
+        indices.begin(),
+        indices.begin() + static_cast<std::ptrdiff_t>(result_count),
+        indices.end(),
+        distance_order
+    );
+    indices.resize(result_count);
+    return indices;
 }

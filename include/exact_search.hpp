@@ -1,18 +1,21 @@
 #ifndef EXACT_SEARCH_HPP
 #define EXACT_SEARCH_HPP
 
-#include "search_method.hpp"
+#include <vector>
 
+#include "common.hpp"
 
-// Compares the query with every database vector
-class ExactSearch : public SearchMethod {
+class ExactSearch {
 public:
-    void build(const VectorList& database) override;
-    std::vector<int> search(const Vector& query) override;
+    // Builds the database used by subsequent searches.
+    bool build(const VectorList& database);
+
+    // Returns the closest database vector indices in ascending distance order.
+    std::vector<int> search(const Vector& query, int top_n) const;
 
 private:
     VectorList database_;
+    std::size_t dimensions_ = 0;
 };
-
 
 #endif
