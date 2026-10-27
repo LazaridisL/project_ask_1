@@ -11,6 +11,7 @@
 #include "options.hpp"
 #include "vector_cache.hpp"
 #include "lsh_search.hpp"
+#include "ivfflat_search.hpp"
 
 
 static std::unique_ptr<SearchMethod> createSearchMethod(const Options& options) {
@@ -26,6 +27,10 @@ static std::unique_ptr<SearchMethod> createSearchMethod(const Options& options) 
         options.seed
     );
 }
+
+    if (options.method == "ivfflat") {
+        return std::make_unique<IvfFlatSearch>(options.kclusters, options.nprobe, options.seed);
+    }
 
     return nullptr;
 }
