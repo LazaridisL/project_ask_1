@@ -65,13 +65,13 @@ vcpkg_installed/
 
 # test output & cache
 Testing/
-.cache/
+cache/
+
+# Search results directory
+results/
 
 # Image directories
 hpatches/
 mirflickr/
-
-# Cache directory
-cache/
 
 .vscode/
