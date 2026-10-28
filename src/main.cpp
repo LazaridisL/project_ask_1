@@ -13,6 +13,7 @@
 #include "lsh_search.hpp"
 #include "ivfflat_search.hpp"
 #include "hypercube_search.hpp"
+#include "ivfpq_search.hpp"
 
 
 static std::unique_ptr<SearchMethod> createSearchMethod(const Options& options) {
@@ -35,6 +36,10 @@ static std::unique_ptr<SearchMethod> createSearchMethod(const Options& options) 
 
     if (options.method == "hypercube") {
         return std::make_unique<HypercubeSearch>(options.kproj, options.w, options.M, options.probes, options.seed);
+    }
+
+    if (options.method == "ivfpq") {
+        return std::make_unique<IvfPqSearch>(options.kclusters, options.nprobe, options.M, options.nbits, options.seed);
     }
 
     return nullptr;
