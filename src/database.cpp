@@ -1,9 +1,8 @@
 #include "database.hpp"
 
 #include <filesystem>
-#include <iostream>
 
-#include "vector_cache.hpp"
+#include "vocabulary.hpp"
 
 
 static size_t hpatchesIndex(size_t sequencePosition, int imageNumber) {

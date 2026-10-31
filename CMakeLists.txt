@@ -16,10 +16,8 @@ add_library(search_core
     src/common.cpp
     src/sift_extractor.cpp
     src/kmeans.cpp
-    src/vector_io.cpp
     src/dataset.cpp
     src/vocabulary.cpp
-    src/vector_cache.cpp
     src/options.cpp
     src/database.cpp
     src/exact_search.cpp
@@ -29,6 +27,7 @@ add_library(search_core
     src/ivfflat_search.cpp
     src/hypercube_search.cpp
     src/ivfpq_search.cpp
+    src/cache.cpp
 )
 target_include_directories(search_core PUBLIC include)
 target_link_libraries(search_core PUBLIC ${OpenCV_LIBS} OpenMP::OpenMP_CXX)

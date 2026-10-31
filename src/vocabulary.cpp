@@ -2,12 +2,15 @@
 
 #include <algorithm>
 #include <iostream>
+#include <random>
+#include <utility>
 
 #include "kmeans.hpp"
 #include "sift_extractor.hpp"
 
 
-VectorList sampleDescriptors(const VectorList& descriptors, int maxCount, std::mt19937& generator) {
+// Returns maxCount random descriptors or all of them if there are less than maxCount
+static VectorList sampleDescriptors(const VectorList& descriptors, int maxCount, std::mt19937& generator) {
     if (descriptors.size() <= static_cast<size_t>(maxCount)) {
         return descriptors;
     }
@@ -47,7 +50,6 @@ VectorList buildVocabulary(const std::vector<std::string>& trainingImagePaths, i
         return {};
     }
 
-    // Using std::cerr to print the message immediately
     std::cerr << " vocabulary: running k-means with K=" << K << "\n";
     KMeansResult result = kmeans(trainingDescriptors, K, maxIterations, seed);
     std::cerr << " vocabulary: k-means finished after " << result.iterations << " iterations\n";
@@ -72,4 +74,34 @@ Vector computeHistogram(const VectorList& descriptors, const VectorList& vocabul
     }
 
     return histogram;
+}
+
+VectorList computeImageVectors(const std::vector<std::string>& imagePaths, const VectorList& vocabulary, const std::string& label) {
+    VectorList vectors(imagePaths.size());
+
+    // One image per CPU core at the same time
+    #pragma omp parallel for schedule(dynamic)
+    for (size_t i=0; i<imagePaths.size(); i++) {
+        VectorList descriptors = extractSiftDescriptors(imagePaths[i]);
+        Vector histogram = computeHistogram(descriptors, vocabulary);
+
+        if (histogram.empty()) {
+            histogram.assign(vocabulary.size(), 0.0f);  // Mark it as zero vector image
+        }
+        vectors[i] = std::move(histogram);
+    }
+
+    std::cerr << "Finished " << label << " vectors\n";
+
+    return vectors;
+}
+
+bool isEmptyImageVector(const Vector& vector) {
+    for (float value : vector) {
+        if (value != 0.0f) {
+            return false;
+        }
+    }
+
+    return true;
 }
