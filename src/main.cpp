@@ -2,6 +2,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <exception>
 
 #include "database.hpp"
 #include "dataset.hpp"
@@ -76,6 +77,22 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Create the search method
+    std::unique_ptr<SearchMethod> method;
+    try {
+        method = createSearchMethod(options);
+    } catch (const std::exception& error) {
+        std::cerr << "Error: " << error.what() << "\n";
+        
+        return 1;
+    }
+    if (!method) {
+        std::cerr << "Error: unknown method \"" << options.method << "\"\n";
+        
+        return 1;
+    }
+
+
     Split split;
     if (!readSplit(options.splitPath, split)) {
         return 1;
@@ -85,6 +102,12 @@ int main(int argc, char* argv[]) {
     std::vector<std::string> trainingPaths = allImagesOf(split.train, options.hpatchesFolder);
     std::vector<std::string> hpatchesPaths = allImagesOf(querySequences, options.hpatchesFolder);
     std::vector<std::string> mirflickrPaths = listMirflickrImages(options.mirflickrFolder);
+
+    if (mirflickrPaths.empty()) {
+        std::cerr << "Error: no MIRFlickr images found in " << options.mirflickrFolder << "\n";
+
+        return 1;
+    }
 
     // Cache files are named based on the parameters used to produce them 
     // Different K, S or seed cannot use the same file
@@ -133,13 +156,18 @@ int main(int argc, char* argv[]) {
     std::vector<ImageEntry> queries = buildQueries(querySequences, hpatchesVectors);
     std::cerr << "Database: " << database.size() << " images, " << queries.size() << " queries\n";
 
-    // Build the index of the chosen method
-    std::unique_ptr<SearchMethod> method = createSearchMethod(options);
-    if (!method) {
-        std::cerr << "Error: No method \"" << options.method << "\"\n";
+    const size_t distractorsUsed = database.size() - 5 * querySequences.size();
+    if (distractorsUsed < static_cast<size_t>(options.distractorCount)) {
+        std::cerr << "Warning: " << distractorsUsed << " MIRFlickr images used (D = " << options.distractorCount << ")\n";
+    }
+
+    try {
+        method->build(vectorsOf(database));
+    } catch (const std::exception& error) {
+        std::cerr << "Error: " << error.what() << "\n";
+
         return 1;
     }
-    method->build(vectorsOf(database));
 
     // Run and evaluate every query
     std::vector<QueryResult> results = runQueries(*method, database, queries);

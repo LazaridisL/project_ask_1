@@ -119,7 +119,13 @@ bool parseOptions(int argc, char* argv[], Options& options) {
     if ((options.querySet != "validation") && (options.querySet != "test")) {
         std::cerr << "Error: -set must be \"validation\" or \"test\"\n";
         return false;
-    }    
+    }
+
+    if ((options.method == "ivfpq") && ((options.M < 1) || (options.vocabularySize % options.M != 0))) {
+        std::cerr << "Error: In IVFPQ -M must divide the vocabulary size \n";
+
+        return false;
+    }
 
     // The default value for M depending on the search method
     if (!mGiven) {

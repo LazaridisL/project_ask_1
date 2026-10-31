@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iostream>
 #include <utility>
+#include <stdexcept>
 
 #include "kmeans.hpp"
 
@@ -13,6 +14,9 @@ static const int maxKMeansIterations = 50;
 IvfFlatSearch::IvfFlatSearch(int kclusters, int nprobe, unsigned int seed)
     : kclusters_(kclusters), nprobe_(nprobe), seed_(seed) {
 
+    if (nprobe < 1) {
+        throw std::invalid_argument("IVFFlat: nprobe must be at least 1");
+    }
 }
 
 void IvfFlatSearch::build(const VectorList& database) {

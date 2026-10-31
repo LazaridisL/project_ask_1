@@ -48,6 +48,11 @@ void HypercubeSearch::build(const VectorList& database) {
         vertices_[vertexOf(database_[index])].push_back(static_cast<int>(index));
     }
 
+    // Shuffle the list because the HPatches images are always first
+    for (std::vector<int>& images : vertices_) {
+        std::shuffle(images.begin(), images.end(), generator_);
+    }
+
     // Probe order
     probeOrder_.resize(vertexCount);
     for (int mask = 0; mask < vertexCount; ++mask) {

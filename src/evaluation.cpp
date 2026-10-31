@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iomanip>
 #include <utility>
+#include <filesystem>
 
 #include "dataset.hpp"
 #include "metrics.hpp"
@@ -67,6 +68,12 @@ static Averages average(const std::vector<QueryResult>& results)
 }
 
 bool writeOutputFile(const std::string& path, const std::string& methodName, const std::vector<ImageEntry>& database, const std::vector<QueryResult>& results) {
+    std::error_code error;
+    const std::filesystem::path folder = std::filesystem::path(path).parent_path();
+    if (!folder.empty()) {
+        std::filesystem::create_directories(folder, error);
+    }
+    
     std::ofstream file(path);
     if (!file) {
         return false;
