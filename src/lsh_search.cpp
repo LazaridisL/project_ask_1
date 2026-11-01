@@ -3,257 +3,155 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <limits>
 #include <random>
 #include <stdexcept>
 #include <utility>
-#include <iostream>
 
 #include "common.hpp"
-#include "search_method.hpp"
 
-// Initialise LSH
-LSHSearch::LSHSearch(
-    int number_tables,
-    int hashes_per_table,
-    double bucket_width,
-    unsigned int seed
-)
+namespace {
+    constexpr int maxIntIndex = std::numeric_limits<int>::max();
+}
+
+LSHSearch::LSHSearch(int number_tables, int hashes_per_table, double bucket_width, unsigned int seed)
     : number_tables_(number_tables),
       hashes_per_table_(hashes_per_table),
       bucket_width_(bucket_width),
-      seed_(seed)
-{
-    if (number_tables_ <= 0 ||
-        hashes_per_table_ <= 0 ||
-        !std::isfinite(bucket_width_) ||
-        bucket_width_ <= 0.0) {
-        throw std::invalid_argument(
-            "LSH parameters must be positive and finite."
-        );
-    }
+      seed_(seed) {
+
+    if (number_tables_ <= 0 || hashes_per_table_ <= 0 ||
+        !std::isfinite(bucket_width_) || bucket_width_ <= 0.0)
+        throw std::invalid_argument("Invalid LSH parameters.");
 }
 
-// Build L independent hash tables
 void LSHSearch::build(const VectorList& database) {
-    // Clear any previously built index first.
     database_.clear();
     tables_.clear();
     dimensions_ = 0;
 
-    if (database.empty() ||
-        database.front().empty() ||
-        database.size() >
-            static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    if (database.empty() || database.front().empty() ||
+        database.size() > static_cast<std::size_t>(maxIntIndex))
         return;
-    }
 
-    const std::size_t dimensions = database.front().size();
+    dimensions_ = database.front().size();
 
-    // All vectors must have the same dimension and finite values
-    for (const Vector& vector : database) {
-        if (vector.size() != dimensions) {
+    for (const auto& v : database) {
+        if (v.size() != dimensions_ ||
+            !std::all_of(v.begin(), v.end(),
+                         [](float x) { return std::isfinite(x); })) {
+            dimensions_ = 0;
             return;
         }
-
-        for (float value : vector) {
-            if (!std::isfinite(value)) {
-                return;
-            }
-        }
     }
 
-    dimensions_ = dimensions;
-
     std::mt19937 generator(seed_);
-    std::normal_distribution<double> projection_distribution(0.0, 1.0);
-    std::uniform_real_distribution<double> offset_distribution(
-        0.0, bucket_width_
-    );
+    std::normal_distribution<double> normal(0.0, 1.0);
+    std::uniform_real_distribution<double> uniform(0.0, bucket_width_);
 
-    std::vector<HashTable> new_tables;
-    new_tables.reserve(static_cast<std::size_t>(number_tables_));
+    tables_.reserve(number_tables_);
 
-    for (int table_index = 0;
-         table_index < number_tables_;
-         ++table_index) {
-
+    for (int t = 0; t < number_tables_; ++t) {
         HashTable table;
 
-        table.projections.reserve(
-            static_cast<std::size_t>(hashes_per_table_)
-        );
-        table.offsets.reserve(
-            static_cast<std::size_t>(hashes_per_table_)
-        );
+        for (int h = 0; h < hashes_per_table_; ++h) {
+            Vector projection(dimensions_);
 
-        // Generate k random projection vectors and offsets
-        for (int hash_index = 0;
-             hash_index < hashes_per_table_;
-             ++hash_index) {
-
-            Vector projection;
-            projection.reserve(dimensions);
-
-            for (std::size_t dimension = 0;
-                 dimension < dimensions;
-                 ++dimension) {
-                projection.push_back(
-                    static_cast<float>(
-                        projection_distribution(generator)
-                    )
-                );
-            }
+            for (float& value : projection)
+                value = static_cast<float>(normal(generator));
 
             table.projections.push_back(std::move(projection));
-            table.offsets.push_back(offset_distribution(generator));
+            table.offsets.push_back(uniform(generator));
         }
 
-        // Insert every database vector into its bucket
-        for (std::size_t vector_index = 0;
-             vector_index < database.size();
-             ++vector_index) {
+        for (std::size_t i = 0; i < database.size(); ++i)
+            table.buckets[hash_vector(database[i], table)].push_back(
+                static_cast<int>(i));
 
-            const std::string key =
-                hash_vector(database[vector_index], table);
-
-            table.buckets[key].push_back(
-                static_cast<int>(vector_index)
-            );
-        }
-
-        new_tables.push_back(std::move(table));
+        tables_.push_back(std::move(table));
     }
 
     database_ = database;
-    dimensions_ = dimensions;
-    tables_ = std::move(new_tables);
 }
 
-// Retrieve candidates from matching buckets and rank them by distance
 std::vector<int> LSHSearch::search(const Vector& query) {
-    if (tables_.empty() ||
-        database_.empty() ||
-        query.size() != dimensions_) {
+    if (tables_.empty() || database_.empty() ||
+        query.size() != dimensions_)
         return {};
-    }
 
-    for (float value : query) {
-        if (!std::isfinite(value)) {
-            return {};
-        }
-    }
+    if (!std::all_of(query.begin(), query.end(),
+                     [](float x) { return std::isfinite(x); }))
+        return {};
 
-    // Avoid evaluating the same candidate more than once
     std::vector<bool> seen(database_.size(), false);
     std::vector<int> candidates;
 
-    // Collect candidates from the matching bucket in each table
-    for (const HashTable& table : tables_) {
-        const std::string key = hash_vector(query, table);
-        const auto bucket = table.buckets.find(key);
-
-        if (bucket == table.buckets.end()) {
+    for (const auto& table : tables_) {
+        auto bucket = table.buckets.find(hash_vector(query, table));
+        if (bucket == table.buckets.end())
             continue;
-        }
 
         for (int index : bucket->second) {
-            const std::size_t position =
-                static_cast<std::size_t>(index);
-
-            if (!seen[position]) {
-                seen[position] = true;
+            if (!seen[index]) {
+                seen[index] = true;
                 candidates.push_back(index);
             }
         }
     }
 
     std::cerr << "Database size: " << database_.size()
-          << ", candidates found: " << candidates.size()
-          << '\n';
+              << ", candidates found: " << candidates.size() << '\n';
 
-    // No fallback
-    if (candidates.empty()) {
+    if (candidates.empty())
         return {};
-    }
 
-    std::sort(
-        candidates.begin(),
-        candidates.end(),
-        [this, &query](int left, int right) {
-            const double left_distance = euclideanDistance(
-                query, database_[static_cast<std::size_t>(left)]
-            );
+    // Calculate each candidate's distance only once.
+    std::vector<std::pair<double, int>> ranked;
+    ranked.reserve(candidates.size());
 
-            const double right_distance = euclideanDistance(
-                query, database_[static_cast<std::size_t>(right)]
-            );
+    for (int index : candidates)
+        ranked.emplace_back(
+            squaredDistance(query, database_[index]), index);
 
-            if (left_distance != right_distance) {
-                return left_distance < right_distance;
-            }
+    const std::size_t count =
+        std::min<std::size_t>(resultsPerQuery, ranked.size());
 
-            return left < right;
-        }
-    );
+    std::partial_sort(ranked.begin(), ranked.begin() + count, ranked.end());
 
-    // The interface requests up to resultsPerQuery results
-    if (candidates.size() >
-        static_cast<std::size_t>(resultsPerQuery)) {
-        candidates.resize(
-            static_cast<std::size_t>(resultsPerQuery)
-        );
-    }
+    std::vector<int> results;
+    results.reserve(count);
 
-    return candidates;
+    for (std::size_t i = 0; i < count; ++i)
+        results.push_back(ranked[i].second);
+
+    return results;
 }
 
-// Convert a vector into its concatenated LSH bucket key
-std::string LSHSearch::hash_vector(
-    const Vector& vector,
-    const HashTable& table
-) const {
+std::string LSHSearch::hash_vector(const Vector& vector, const HashTable& table) const {
+
     std::string key;
 
-    for (std::size_t hash_index = 0;
-         hash_index < table.projections.size();
-         ++hash_index) {
+    for (std::size_t h = 0; h < table.projections.size(); ++h) {
+        double value = table.offsets[h];
+        const auto& projection = table.projections[h];
 
-        double projection_value = table.offsets[hash_index];
-        const Vector& projection = table.projections[hash_index];
+        for (std::size_t d = 0; d < dimensions_; ++d)
+            value += static_cast<double>(vector[d]) * projection[d];
 
-        for (std::size_t dimension = 0;
-             dimension < dimensions_;
-             ++dimension) {
+        const double bucketValue = std::floor(value / bucket_width_);
 
-            projection_value +=
-                static_cast<double>(vector[dimension]) *
-                static_cast<double>(projection[dimension]);
-        }
-
-        const double bucket_value =
-            std::floor(projection_value / bucket_width_);
-
-        // Protect the integer conversion from overflow
-        if (bucket_value <
-                static_cast<double>(
-                    std::numeric_limits<std::int64_t>::min()
-                ) ||
-            bucket_value >
-                static_cast<double>(
-                    std::numeric_limits<std::int64_t>::max()
-                )) {
+        if (!std::isfinite(bucketValue) ||
+            bucketValue < static_cast<double>(
+                std::numeric_limits<std::int64_t>::min()) ||
+            bucketValue >= static_cast<double>(
+                std::numeric_limits<std::int64_t>::max()))
             throw std::overflow_error("LSH bucket index overflow.");
-        }
 
-        const auto bucket =
-            static_cast<std::int64_t>(bucket_value);
+        if (h > 0)
+            key += ',';
 
-        if (hash_index > 0) {
-            key.push_back(',');
-        }
-
-        key += std::to_string(bucket);
+        key += std::to_string(static_cast<std::int64_t>(bucketValue));
     }
 
     return key;
