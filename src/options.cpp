@@ -38,6 +38,7 @@ static bool isMethodFlag(const std::string& argument) {
 
 bool parseOptions(int argc, char* argv[], Options& options) {
     bool mGiven = false;
+    bool seedGiven = false;
 
     for (int i=1; i<argc; i++) {
         std::string argument = argv[i];
@@ -77,7 +78,12 @@ bool parseOptions(int argc, char* argv[], Options& options) {
         } else if (argument == "-seed") {
             int seed = 0;
             ok = toInt(value, argument, seed);
+            if (ok && (seed < 0)) {
+                std::cerr << "Error: -seed must be greater or equal to 0\n";
+                ok = false;
+            }
             options.seed = static_cast<unsigned int>(seed);
+            seedGiven = true;
         } else if (argument == "-cache") {
             options.cacheFolder = value;
         } else if (argument == "-k") {
@@ -111,8 +117,10 @@ bool parseOptions(int argc, char* argv[], Options& options) {
 
     if (options.hpatchesFolder.empty() || options.mirflickrFolder.empty()
         || options.splitPath.empty() || options.querySet.empty()
-        || options.outputPath.empty() || options.method.empty()) {
-            std::cerr << "Error: -hp, -mir, -split, -set, -o and a search method are required\n";
+        || options.outputPath.empty() || options.method.empty()
+        || (options.vocabularySize == 0) || (options.samplesPerImage == 0)
+        || (options.distractorCount < 0) || !seedGiven) {
+            std::cerr << "Error: -hp, -mir, -split, -set, -o, -vocab, -S, -D, -seed and a search method are required\n";
             return false;
     }
 
@@ -136,8 +144,8 @@ bool parseOptions(int argc, char* argv[], Options& options) {
 }
 
 void printUsage() {
-    std::cerr << "Usage: ./search -hp <path> -mir <path> -split <file> -set <validation|test>\n"
-              << "                -o <output file> [-vocab K] [-S S] [-D D] [-seed seed]\n"
+    std::cerr << "Usage: ./build/search -hp <path> -mir <path> -split <file> -set <validation|test>\n"
+              << "                -o <output file> -vocab K -S S -D D -seed seed\n"
               << "                <-exact | -lsh | -hypercube | -ivfflat | -ivfpq> [method parameters]\n"
               << "                [-cache folder]\n";
 }

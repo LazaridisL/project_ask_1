@@ -7,10 +7,10 @@
 
 int findNearestCentroid(const Vector& point, const VectorList& centroids) {
     int nearestIndex = 0;
-    double nearestDistance = squaredDistance(point, centroids[0]);
+    double nearestDistance = euclideanDistance(point, centroids[0]);
 
     for (size_t c=1; c<centroids.size(); c++) {
-        double distance = squaredDistance(point, centroids[c]);
+        double distance = euclideanDistance(point, centroids[c]);
         if (distance < nearestDistance) {
             nearestDistance = distance;
             nearestIndex = static_cast<int>(c);

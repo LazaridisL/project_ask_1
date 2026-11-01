@@ -122,7 +122,7 @@ std::vector<int> HypercubeSearch::search(const Vector& query) {
             if (static_cast<int>(candidates.size()) >= maxCandidates_) {
                 break;
             }
-            candidates.emplace_back(squaredDistance(query, database_[index]), index);
+            candidates.emplace_back(euclideanDistance(query, database_[index]), index);
         }
         ++verticesVisited;
     }

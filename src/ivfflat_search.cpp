@@ -46,7 +46,7 @@ std::vector<int> IvfFlatSearch::search(const Vector& query) {
     std::vector<std::pair<double, int>> clusterDistances;
     clusterDistances.reserve(centroids_.size());
     for (size_t c=0; c<centroids_.size(); c++) {
-        clusterDistances.push_back({squaredDistance(query, centroids_[c]), static_cast<int>(c)});
+        clusterDistances.push_back({euclideanDistance(query, centroids_[c]), static_cast<int>(c)});
     }
 
     size_t probes = std::min(static_cast<size_t>(nprobe_), clusterDistances.size());
@@ -56,7 +56,7 @@ std::vector<int> IvfFlatSearch::search(const Vector& query) {
     for (size_t p=0; p<probes; p++) {
         int cluster = clusterDistances[p].second;
         for (int index : clusterMembers_[cluster]) {
-            candidates.push_back({squaredDistance(query, database_[index]), index});
+            candidates.push_back({euclideanDistance(query, database_[index]), index});
         }
     }
 

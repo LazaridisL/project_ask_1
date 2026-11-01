@@ -10,12 +10,12 @@ struct Options {
     std::string hpatchesFolder;     // -hp
     std::string mirflickrFolder;    // -mir
     std::string splitPath;          // -split
-    int vocabularySize = 256;       // -vocab
-    int samplesPerImage = 500;      // -S
-    int distractorCount = 1000;     // -D
+    int vocabularySize = 0;       // -vocab
+    int samplesPerImage = 0;      // -S
+    int distractorCount = -1;     // -D
     std::string querySet;           // -set 
     std::string outputPath;         // -o
-    unsigned int seed = 1;          // -seed
+    unsigned int seed = -1;          // -seed
     std::string cacheFolder;        // -cache, in case it is missing, everything is computed from scratch
 
     std::string method;             // Search method selection

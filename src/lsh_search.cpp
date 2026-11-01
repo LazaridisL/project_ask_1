@@ -181,11 +181,11 @@ std::vector<int> LSHSearch::search(const Vector& query) {
         candidates.begin(),
         candidates.end(),
         [this, &query](int left, int right) {
-            const double left_distance = squaredDistance(
+            const double left_distance = euclideanDistance(
                 query, database_[static_cast<std::size_t>(left)]
             );
 
-            const double right_distance = squaredDistance(
+            const double right_distance = euclideanDistance(
                 query, database_[static_cast<std::size_t>(right)]
             );
 

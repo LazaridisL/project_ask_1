@@ -113,7 +113,7 @@ std::vector<int> IvfPqSearch::search(const Vector& query) {
     std::vector<std::pair<double, int>> clusterDistances;
     clusterDistances.reserve(centroids_.size());
     for (size_t cluster = 0; cluster < centroids_.size(); cluster++) {
-        clusterDistances.emplace_back(squaredDistance(query, centroids_[cluster]), static_cast<int>(cluster));
+        clusterDistances.emplace_back(euclideanDistance(query, centroids_[cluster]), static_cast<int>(cluster));
     }
     const size_t probeCount = std::min(clusterDistances.size(), static_cast<size_t>(nprobe_));
     std::partial_sort(clusterDistances.begin(), clusterDistances.begin() + probeCount, clusterDistances.end());
@@ -132,7 +132,7 @@ std::vector<int> IvfPqSearch::search(const Vector& query) {
             for (int piece = 0; piece < subvectorCount_; piece++) {
                 distance += table[piece][codes_[index][piece]];
             }
-            candidates.emplace_back(distance, index);
+            candidates.emplace_back(std::sqrt(distance), index);
         }
     }
 
